@@ -1,0 +1,3 @@
+INSERT INTO events(slug,name,description,status,starts_at,ends_at) VALUES('rumgip-championship-v4','Rumgip Championship V.4','More Than A Game.','scheduled','2026-08-18T00:00:00+07:00','2026-08-24T23:59:59+07:00') ON CONFLICT(slug) DO NOTHING;
+INSERT INTO passes(event_id,name,code,price_idr,duration_hours) SELECT id,'Daily Pass','DAILY',29000,24 FROM events WHERE slug='rumgip-championship-v4' ON CONFLICT(code) DO NOTHING;
+INSERT INTO passes(event_id,name,code,price_idr,duration_hours) SELECT id,'Full Event Pass','FULL',99000,NULL FROM events WHERE slug='rumgip-championship-v4' ON CONFLICT(code) DO NOTHING;

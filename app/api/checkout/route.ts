@@ -65,12 +65,6 @@ export async function POST(req: Request) {
       error,
     });
 
-    await sql`
-      UPDATE orders
-      SET status = 'FAILED'
-      WHERE id = ${orders[0].id}
-    `;
-
     return NextResponse.json(
       { error: 'Unable to create payment. Please try again.' },
       { status: 502 },

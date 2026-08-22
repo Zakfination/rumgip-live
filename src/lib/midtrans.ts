@@ -1,5 +1,46 @@
 import crypto from 'node:crypto';
-export type MidtransNotification = { order_id: string; status_code: string; gross_amount: string; signature_key: string; transaction_status: string; fraud_status?: string };
-export function verifyMidtransSignature(n: MidtransNotification) { const key = process.env.MIDTRANS_SERVER_KEY; if (!key) throw new Error('MIDTRANS_SERVER_KEY is not configured'); const expected = crypto.createHash('sha512').update(`${n.order_id}${n.status_code}${n.gross_amount}${key}`).digest('hex'); if (expected.length !== n.signature_key.length) return false; return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(n.signature_key)); }
-export function isSuccessfulTransaction(n: MidtransNotification) { return n.transaction_status === 'settlement' || (n.transaction_status === 'capture' && n.fraud_status !== 'deny'); }
-export async function createSnapTransaction(orderId: string, amount: number, customer: { first_name: string; email: string }) { const key = process.env.MIDTRANS_SERVER_KEY; if (!key) throw new Error('MIDTRANS_SERVER_KEY is not configured'); const base = process.env.MIDTRANS_IS_PRODUCTION === 'true' ? 'https://app.midtrans.com' : 'https://app.sandbox.midtrans.com'; const auth = Buffer.from(`${key}:`).toString('base64'); const res = await fetch(`${base}/snap/v1/transactions`, { method: 'POST', headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ transaction_details: { order_id: orderId, gross_amount: amount }, customer_details: customer }) }); if (!res.ok) throw new Error(`Midtrans Snap error: ${res.status}`); return res.json() as Promise<{ token: string; redirect_url: string }>; }
+
+export type MidtransNotification = {
+  order_id: string;
+  status_code: string;
+  gross_amount: string;
+  signature_key: string;
+  transaction_status: string;
+  fraud_status?: string;
+};
+
+export function verifyMidtransSignature(n: MidtransNotification) {
+  const key = process.env.MIDTRANS_SERVER_KEY;
+  if (!key) throw new Error('MIDTRANS_SERVER_KEY is not configured');
+  const expected = crypto.createHash('sha512').update(`${n.order_id}${n.status_code}${n.gross_amount}${key}`).digest('hex');
+  if (expected.length !== n.signature_key.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(n.signature_key));
+}
+
+export function isSuccessfulTransaction(n: MidtransNotification) {
+  return n.transaction_status === 'settlement' || (n.transaction_status === 'capture' && n.fraud_status !== 'deny');
+}
+
+export async function createSnapTransaction(orderId: string, amount: number, customer: { first_name: string; email: string }) {
+  const key = process.env.MIDTRANS_SERVER_KEY;
+  if (!key) throw new Error('MIDTRANS_SERVER_KEY is not configured');
+  const base = process.env.MIDTRANS_IS_PRODUCTION === 'true' ? 'https://app.midtrans.com' : 'https://app.sandbox.midtrans.com';
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '');
+  if (!appUrl) throw new Error('NEXT_PUBLIC_APP_URL is not configured');
+  const auth = Buffer.from(`${key}:`).toString('base64');
+  const res = await fetch(`${base}/snap/v1/transactions`, {
+    method: 'POST',
+    headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      transaction_details: { order_id: orderId, gross_amount: amount },
+      customer_details: customer,
+      callbacks: {
+        finish: `${appUrl}/payment/result?order_id=${encodeURIComponent(orderId)}`,
+        unfinish: `${appUrl}/payment/result?order_id=${encodeURIComponent(orderId)}`,
+        error: `${appUrl}/payment/result?order_id=${encodeURIComponent(orderId)}`,
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(`Midtrans Snap error: ${res.status}`);
+  return res.json() as Promise<{ token: string; redirect_url: string }>;
+}

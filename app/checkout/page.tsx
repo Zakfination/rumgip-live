@@ -1,36 +1,16 @@
-'use client';
-
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
-import { Suspense, useState } from 'react';
+import CheckoutButton from './CheckoutButton';
 
-function CheckoutContent() {
-  const params = useSearchParams();
-  const plan = params.get('plan') === 'full' ? 'full' : 'daily';
+type Plan = 'daily' | 'full';
+
+export default async function Checkout({
+  searchParams,
+}: {
+  searchParams: Promise<{ plan?: string }>;
+}) {
+  const params = await searchParams;
+  const plan: Plan = params.plan === 'full' ? 'full' : 'daily';
   const full = plan === 'full';
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  async function pay() {
-    setLoading(true);
-    setError('');
-    const r = await fetch('/api/checkout', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ plan }),
-    });
-    const d = await r.json();
-    if (r.status === 401) {
-      window.location.href = `/login?next=/checkout?plan=${plan}`;
-      return;
-    }
-    if (!r.ok) {
-      setError(d.error || 'Checkout failed');
-      setLoading(false);
-      return;
-    }
-    window.location.href = d.redirectUrl;
-  }
 
   return (
     <main className="container" style={{ padding: '60px 0', maxWidth: 720 }}>
@@ -46,24 +26,8 @@ function CheckoutContent() {
         <p className="muted">
           Bayar melalui Midtrans. Akses live hanya diberikan setelah pembayaran terverifikasi oleh server.
         </p>
-        <button
-          onClick={pay}
-          disabled={loading}
-          className="btn btn-primary"
-          style={{ width: '100%', marginTop: 16, cursor: 'pointer' }}
-        >
-          {loading ? 'Opening secure payment…' : 'Continue to secure payment'}
-        </button>
-        {error && <p style={{ color: '#ff8d8d' }}>{error}</p>}
+        <CheckoutButton plan={plan} />
       </div>
     </main>
-  );
-}
-
-export default function Checkout() {
-  return (
-    <Suspense fallback={<main className="container" style={{ padding: '60px 0' }}>Loading checkout…</main>}>
-      <CheckoutContent />
-    </Suspense>
   );
 }

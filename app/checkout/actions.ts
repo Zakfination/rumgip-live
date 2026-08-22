@@ -16,11 +16,14 @@ export async function startCheckout(formData: FormData) {
   const user = await getSessionUser();
   if (!user) redirect(`/login?next=${encodeURIComponent(next)}`);
 
+  let redirectUrl: string;
   try {
     const checkout = await createCheckoutOrder(user, plan);
-    redirect(checkout.redirectUrl);
+    redirectUrl = checkout.redirectUrl;
   } catch (error) {
     console.error('Checkout action failed', { plan, error });
     redirect(`${next}&error=payment`);
   }
+
+  redirect(redirectUrl!);
 }

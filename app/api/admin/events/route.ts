@@ -1,0 +1,5 @@
+import { NextResponse } from 'next/server';
+import { db } from '@/src/lib/neon';
+import { requireAdmin } from '@/src/lib/admin';
+export async function GET(){try{await requireAdmin();return NextResponse.json(await db()`SELECT id,slug,name,status,starts_at,ends_at FROM events ORDER BY starts_at NULLS LAST`)}catch{return NextResponse.json({error:'Admin access required'},{status:403})}}
+export async function POST(req:Request){try{await requireAdmin();const b=await req.json();if(!b.slug||!b.name)return NextResponse.json({error:'slug and name are required'},{status:400});const rows=await db()`INSERT INTO events(slug,name,description,status,starts_at,ends_at) VALUES(${b.slug},${b.name},${b.description||null},${b.status||'draft'},${b.startsAt||null},${b.endsAt||null}) RETURNING *`;return NextResponse.json(rows[0],{status:201})}catch(e){return NextResponse.json({error:e instanceof Error&&e.message==='ADMIN_REQUIRED'?'Admin access required':'Unable to create event'},{status:e instanceof Error&&e.message==='ADMIN_REQUIRED'?403:400})}}

@@ -1,8 +1,8 @@
 {
   "name":"rumgip-live",
-  "version":"0.2.0",
+  "version":"0.2.1",
   "private":true,
   "scripts":{"dev":"next dev","build":"next build","start":"next start","lint":"next lint","typecheck":"tsc --noEmit","test":"tsx --test tests/**/*.test.ts","db:migrate":"tsx scripts/migrate.ts"},
-  "dependencies":{"@neondatabase/serverless":"latest","next":"latest","react":"latest","react-dom":"latest","lucide-react":"latest"},
+  "dependencies":{"@neondatabase/serverless":"latest","@tailwindcss/postcss":"latest","next":"latest","react":"latest","react-dom":"latest","lucide-react":"latest"},
   "devDependencies":{"@types/node":"latest","@types/react":"latest","@types/react-dom":"latest","autoprefixer":"latest","postcss":"latest","tailwindcss":"latest","typescript":"latest","tsx":"latest"}
 }

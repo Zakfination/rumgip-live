@@ -11,7 +11,8 @@ export async function GET(req: Request) {
     await requireAdmin();
     const eventId = new URL(req.url).searchParams.get('eventId');
     if (!eventId) return NextResponse.json({ error: 'eventId required' }, { status: 400 });
-    const rows = await db()`
+    const sql = db();
+    const rows = await sql`
       SELECT s.id, s.event_id, s.match_id, s.provider, s.playback_id, s.active, s.created_at
       FROM streams s
       WHERE s.event_id=${eventId}::uuid
@@ -33,8 +34,8 @@ export async function POST(req: Request) {
     }
 
     const sql = db();
-    if (active) await sql()`UPDATE streams SET active=false WHERE event_id=${eventId}::uuid`;
-    const rows = await sql()`
+    if (active) await sql`UPDATE streams SET active=false WHERE event_id=${eventId}::uuid`;
+    const rows = await sql`
       INSERT INTO streams(event_id,match_id,provider,playback_id,active)
       VALUES(${eventId}::uuid,${matchId || null},'youtube',${playbackId},${Boolean(active)})
       RETURNING id,event_id,match_id,provider,playback_id,active,created_at
@@ -51,7 +52,8 @@ export async function DELETE(req: Request) {
     await requireAdmin();
     const eventId = new URL(req.url).searchParams.get('eventId');
     if (!eventId) return NextResponse.json({ error: 'eventId required' }, { status: 400 });
-    await db()`UPDATE streams SET active=false WHERE event_id=${eventId}::uuid`;
+    const sql = db();
+    await sql`UPDATE streams SET active=false WHERE event_id=${eventId}::uuid`;
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: 'Admin access required' }, { status: 403 });

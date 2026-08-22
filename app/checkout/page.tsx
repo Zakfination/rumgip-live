@@ -1,16 +1,23 @@
 import Link from 'next/link';
-import CheckoutButton from './CheckoutButton';
+import { startCheckout } from './actions';
+import SubmitButton from './SubmitButton';
 
 type Plan = 'daily' | 'full';
+
+type SearchParams = {
+  plan?: string;
+  error?: string;
+};
 
 export default async function Checkout({
   searchParams,
 }: {
-  searchParams: Promise<{ plan?: string }>;
+  searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
   const plan: Plan = params.plan === 'full' ? 'full' : 'daily';
   const full = plan === 'full';
+  const paymentError = params.error === 'payment';
 
   return (
     <main className="container" style={{ padding: '60px 0', maxWidth: 720 }}>
@@ -26,7 +33,20 @@ export default async function Checkout({
         <p className="muted">
           Bayar melalui Midtrans. Akses live hanya diberikan setelah pembayaran terverifikasi oleh server.
         </p>
-        <CheckoutButton plan={plan} />
+
+        {paymentError && (
+          <div role="alert" className="card" style={{ marginTop: 16, padding: 14 }}>
+            <strong>Payment belum dapat dibuat.</strong>
+            <p className="muted" style={{ margin: '6px 0 0' }}>
+              Silakan coba lagi. Jika masih gagal, kami perlu memeriksa konfigurasi Midtrans di server.
+            </p>
+          </div>
+        )}
+
+        <form action={startCheckout}>
+          <input type="hidden" name="plan" value={plan} />
+          <SubmitButton />
+        </form>
       </div>
     </main>
   );

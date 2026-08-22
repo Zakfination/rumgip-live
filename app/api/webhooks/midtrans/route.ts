@@ -25,8 +25,6 @@ export async function POST(req: Request) {
   const transactionStatus = notification.transaction_status.toLowerCase();
   const fraudStatus = notification.fraud_status?.toLowerCase();
 
-  // A capture is only successful when Midtrans has accepted it. Settlement is
-  // successful regardless of an omitted fraud_status field.
   if (transactionStatus === 'capture' && fraudStatus === 'deny') {
     return NextResponse.json({ error: 'Transaction denied by fraud check' }, { status: 400 });
   }
@@ -36,7 +34,6 @@ export async function POST(req: Request) {
       o.id,
       o.user_id,
       o.amount_idr,
-      o.status AS order_status,
       p.id AS pass_id,
       p.duration_hours,
       e.id AS event_id,
@@ -49,8 +46,8 @@ export async function POST(req: Request) {
   `;
   const order = orders[0];
 
-  // Return 404 so Midtrans can retry if our database has not caught up yet.
-  // Do not create a webhook_events row before the order is found.
+  // If the order has not reached Neon yet, return 404 so Midtrans can retry.
+  // Do not create an event record before the order is found.
   if (!order) {
     return NextResponse.json({ error: 'Order not found' }, { status: 404 });
   }
@@ -59,8 +56,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Amount mismatch' }, { status: 400 });
   }
 
-  // One transaction can produce multiple notifications (pending -> settlement,
-  // etc.). transaction_id alone is therefore NOT a safe idempotency key.
+  // A single payment can legitimately emit multiple statuses, e.g. pending ->
+  // settlement. transaction_id alone is therefore not a safe idempotency key.
   const eventKey = [
     notification.transaction_id || notification.order_id,
     notification.status_code,
@@ -68,7 +65,9 @@ export async function POST(req: Request) {
     notification.gross_amount,
   ].join(':');
 
-  const inserted = await sql`
+  // Keep failed/incomplete processing retryable: if a previous attempt created
+  // the event but crashed before marking it processed, process it again.
+  const eventRows = await sql`
     INSERT INTO webhook_events(
       provider,
       external_event_id,
@@ -81,16 +80,17 @@ export async function POST(req: Request) {
       ${JSON.stringify(notification)}::jsonb,
       false
     )
-    ON CONFLICT(provider, external_event_id) DO NOTHING
-    RETURNING id
+    ON CONFLICT(provider, external_event_id)
+    DO UPDATE SET payload = EXCLUDED.payload
+    RETURNING id, processed
   `;
 
-  if (!inserted.length) {
+  const event = eventRows[0];
+  if (event?.processed) {
     return NextResponse.json({ ok: true, duplicate: true });
   }
 
   if (isSuccessfulTransaction(notification)) {
-    // Never downgrade an already-paid order.
     await sql`
       UPDATE orders
       SET status = 'paid', paid_at = COALESCE(paid_at, now())
@@ -102,8 +102,6 @@ export async function POST(req: Request) {
       ? new Date(order.ends_at)
       : new Date(Date.now() + Number(order.duration_hours || 24) * 3600000);
 
-    // source_order_id is UNIQUE, making entitlement creation idempotent even if
-    // Midtrans retries the same successful notification.
     await sql`
       INSERT INTO entitlements(
         user_id,
@@ -124,7 +122,7 @@ export async function POST(req: Request) {
       ON CONFLICT(source_order_id) DO NOTHING
     `;
   } else if (FAILED_STATUSES.has(transactionStatus)) {
-    // A failed notification must never overwrite a successful payment.
+    // A failed notification can never downgrade an already-paid order.
     await sql`
       UPDATE orders
       SET status = 'failed'
@@ -136,7 +134,7 @@ export async function POST(req: Request) {
   await sql`
     UPDATE webhook_events
     SET processed = true
-    WHERE id = ${inserted[0].id}
+    WHERE id = ${event.id}
   `;
 
   return NextResponse.json({ ok: true });
